@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Juego del Impostor</title>
+
+<style>
+body{
+    margin:0;
+    font-family:'Segoe UI',sans-serif;
+    background:#2e2e2e;
+    color:white;
+    text-align:center;
+}
+
+h1{margin:25px 0;}
+
+.card{
+    background:#141414;
+    border-radius:20px;
+    padding:30px;
+    max-width:420px;
+    margin:25px auto;
+    box-shadow:0 0 20px rgba(0,0,0,.5);
+    animation:fade .4s ease;
+}
+
+@keyframes fade{
+    from{opacity:0;transform:scale(.95)}
+    to{opacity:1;transform:scale(1)}
+}
+
+label{display:block;margin-top:15px;font-size:18px;font-weight:bold}
+input,select{
+    width:80%;
+    padding:12px;
+    border-radius:10px;
+    border:none;
+    margin-top:8px;
+    font-size:16px;
+}
+
+button{
+    background:linear-gradient(135deg,#ff0033,#ff6600);
+    border:none;
+    border-radius:30px;
+    padding:15px 35px;
+    color:white;
+    font-size:18px;
+    font-weight:bold;
+    cursor:pointer;
+    margin-top:20px;
+    transition:.15s;
+}
+button:hover{transform:scale(1.05)}
+
+.hidden{display:none}
+
+.big{font-size:34px;font-weight:bold;margin:20px 0}
+.impostor{color:#ff3b3b}
+.word{color:#4cff4c}
+
+/* GRID */
+.grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:15px;
+}
+.player-box{
+    background:#1e1e1e;
+    border-radius:15px;
+    padding:20px;
+    cursor:pointer;
+    transition:.2s;
+}
+.player-box:hover{transform:scale(1.05);background:#2a2a2a}
+.ready{opacity:.5;cursor:default}
+
+/* FLIP CARD */
+.flip-container{perspective:1000px;margin:25px 0}
+.flip-card{
+    height:160px;
+    transform-style:preserve-3d;
+    transition:.6s;
+}
+.flip-card.flipped{transform:rotateY(180deg)}
+.flip-face{
+    position:absolute;
+    width:100%;
+    height:160px;
+    backface-visibility:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:20px;
+    font-size:30px;
+    font-weight:bold;
+}
+.front{background:#1e1e1e}
+.back{background:#000;transform:rotateY(180deg)}
+
+/* FIRMA */
+.signature{
+    position:fixed;
+    bottom:10px;
+    right:15px;
+    font-size:13px;
+    opacity:.6;
+    pointer-events:none;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🕵️ Juego del Impostor</h1>
+
+<!-- CONFIG -->
+<div id="step1" class="card">
+    <label>Jugadores</label>
+    <input type="number" id="players" min="3" max="30" value="6">
+    <label>Impostores</label>
+    <input type="number" id="impostors" min="1" value="1">
+    <button onclick="goStep2()">Continuar</button>
+</div>
+
+<!-- CATEGORIA -->
+<div id="step2" class="card hidden">
+    <label>Categoría</label>
+    <select id="category">
+        <option value="marcas">Marcas</option>
+        <option value="paises">Países</option>
+        <option value="objetos">Objetos</option>
+        <option value="animales">Animales</option>
+        <option value="comidas">Comidas</option>
+        <option value="profesiones">Profesiones</option>
+        <option value="ciudades">Ciudades</option>
+    </select>
+    <button onclick="startGame()">Comenzar</button>
+</div>
+
+<!-- GRID -->
+<div id="gridView" class="card hidden">
+    <h2>Selecciona tu jugador</h2>
+    <div id="grid" class="grid"></div>
+</div>
+
+<!-- JUGADOR -->
+<div id="playerView" class="card hidden">
+    <div id="playerTitle" class="big"></div>
+
+    <div class="flip-container">
+        <div id="flipCard" class="flip-card">
+            <div class="flip-face front">❓</div>
+            <div class="flip-face back" id="roleBack"></div>
+        </div>
+    </div>
+
+    <button id="showBtn" onclick="showRole()">Ver palabra</button>
+    <button id="nextBtn" class="hidden" onclick="closePlayer()">Siguiente</button>
+</div>
+
+<!-- FINAL -->
+<div id="end" class="card hidden">
+    <h2>💬 Discusión</h2>
+    <button onclick="revealImpostors()">Revelar impostor(es)</button>
+</div>
+
+<!-- FIRMA -->
+<div class="signature">Hecho por ssaauull123</div>
+
+<script>
+const categories={
+    marcas:["Nike","Adidas","Apple","Samsung","Sony","LG","Puma","Reebok","Gucci","Prada","Ferrari","BMW","Audi","Toyota","Coca-Cola"],
+    paises:["Argentina","España","Brasil","México","Italia","Francia","Alemania","Chile","Perú","Colombia","Japón","China","Canadá","Egipto","Australia"],
+    objetos:["Silla","Mesa","Teléfono","Ordenador","Reloj","Mochila","Libro","Lámpara","Cuchara","Tijeras","Televisión","Botella","Teclado","Auriculares","Espejo"],
+    animales:["León","Tigre","Elefante","Jirafa","Cocodrilo","Lobo","Oso","Mono","Águila","Tiburón","Delfín","Pingüino","Cebra","Rinoceronte","Serpiente"],
+    comidas:["Pizza","Hamburguesa","Tacos","Sushi","Paella","Pasta","Empanada","Asado","Ramen","Ensalada","Lasagna","Kebab","Burrito","Milanesa","Hot Dog"],
+    profesiones:["Doctor","Ingeniero","Profesor","Abogado","Arquitecto","Enfermero","Programador","Diseñador","Chef","Mecánico","Electricista","Periodista","Psicólogo","Veterinario","Contador"],
+    ciudades:["París","Londres","Roma","Tokio","Nueva York","Madrid","Barcelona","Berlín","Lisboa","Moscú","Miami","Dubái","Sídney","Atenas","Ámsterdam"]
+};
+
+let roles=[],impostorsArr=[],opened=[],total=0,current=0;
+
+function goStep2(){
+    total=+players.value;
+    if(+impostors.value>=total){alert("Impostores inválidos");return;}
+    step1.classList.add("hidden");
+    step2.classList.remove("hidden");
+}
+
+function startGame(){
+    const word=categories[category.value][Math.floor(Math.random()*15)];
+    roles=Array(total).fill(word);
+    impostorsArr=[];
+    opened=Array(total).fill(false);
+
+    while(impostorsArr.length<+impostors.value){
+        let r=Math.floor(Math.random()*total);
+        if(!impostorsArr.includes(r)){
+            impostorsArr.push(r);
+            roles[r]="IMPOSTOR";
+        }
+    }
+
+    step2.classList.add("hidden");
+    gridView.classList.remove("hidden");
+    renderGrid();
+}
+
+function renderGrid(){
+    grid.innerHTML="";
+    opened.forEach((v,i)=>{
+        const d=document.createElement("div");
+        d.className="player-box"+(v?" ready":"");
+        d.innerHTML=v?`Jugador ${i+1}<br>Listo ✅`:`Jugador ${i+1}`;
+        if(!v) d.onclick=()=>openPlayer(i);
+        grid.appendChild(d);
+    });
+
+    if(opened.every(v=>v)){
+        gridView.classList.add("hidden");
+        end.classList.remove("hidden");
+    }
+}
+
+function openPlayer(i){
+    current=i;
+    gridView.classList.add("hidden");
+    playerView.classList.remove("hidden");
+    playerTitle.innerText=`Jugador ${i+1}`;
+    flipCard.classList.remove("flipped");
+    roleBack.innerHTML="";
+    showBtn.classList.remove("hidden");
+    nextBtn.classList.add("hidden");
+}
+
+function showRole(){
+    roleBack.innerHTML=roles[current]==="IMPOSTOR"
+        ? `<span class="impostor">❌ IMPOSTOR</span>`
+        : `<span class="word">✅ ${roles[current]}</span>`;
+    flipCard.classList.add("flipped");
+    showBtn.classList.add("hidden");
+    nextBtn.classList.remove("hidden");
+}
+
+function closePlayer(){
+    opened[current]=true;
+    playerView.classList.add("hidden");
+    gridView.classList.remove("hidden");
+    renderGrid();
+}
+
+function revealImpostors(){
+    end.innerHTML="<h2>🕵️ Impostor(es)</h2>";
+    impostorsArr.forEach(i=>{
+        end.innerHTML+=`<p class="impostor big">Jugador ${i+1}</p>`;
+    });
+}
+</script>
+
+</body>
+</html>
