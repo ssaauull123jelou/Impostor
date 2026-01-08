@@ -31,13 +31,33 @@ h1{margin:25px 0;}
 }
 
 label{display:block;margin-top:15px;font-size:18px;font-weight:bold}
-input,select{
+input,select,textarea{
     width:80%;
     padding:12px;
     border-radius:10px;
     border:none;
     margin-top:8px;
     font-size:16px;
+}
+
+.player-name-input{
+    width:80%;
+    padding:12px;
+    border-radius:10px;
+    border:none;
+    margin:8px 0;
+    font-size:16px;
+}
+
+.custom-words{
+    width:80%;
+    height:120px;
+    padding:12px;
+    border-radius:10px;
+    border:none;
+    margin-top:8px;
+    font-size:16px;
+    resize:vertical;
 }
 
 button{
@@ -58,6 +78,7 @@ button:hover{transform:scale(1.05)}
 
 .big{font-size:34px;font-weight:bold;margin:20px 0}
 .impostor{color:#ff3b3b}
+.lost{color:#ffd700}
 .word{color:#4cff4c}
 
 /* GRID */
@@ -108,6 +129,19 @@ button:hover{transform:scale(1.05)}
     opacity:.6;
     pointer-events:none;
 }
+
+.player-names-container{
+    max-height:300px;
+    overflow-y:auto;
+    margin-top:15px;
+    padding:10px;
+    background:#1a1a1a;
+    border-radius:10px;
+}
+
+.custom-category-container{
+    margin-top:15px;
+}
 </style>
 </head>
 
@@ -118,16 +152,21 @@ button:hover{transform:scale(1.05)}
 <!-- CONFIG -->
 <div id="step1" class="card">
     <label>Jugadores</label>
-    <input type="number" id="players" min="3" max="30" value="6">
+    <input type="number" id="players" min="3" max="30" value="6" onchange="updatePlayerNameInputs()">
+    <div class="player-names-container" id="playerNamesContainer">
+        <!-- Player name inputs will be generated here -->
+    </div>
     <label>Impostores</label>
-    <input type="number" id="impostors" min="1" value="1">
+    <input type="number" id="impostors" min="1" value="1" onchange="validateConfig()">
+    <label>Perdidos</label>
+    <input type="number" id="lost" min="0" max="30" value="0" onchange="validateConfig()">
     <button onclick="goStep2()">Continuar</button>
 </div>
 
 <!-- CATEGORIA -->
 <div id="step2" class="card hidden">
     <label>Categoría</label>
-    <select id="category">
+    <select id="category" onchange="toggleCustomInput()">
         <option value="marcas">Marcas</option>
         <option value="paises">Países</option>
         <option value="objetos">Objetos</option>
@@ -135,7 +174,15 @@ button:hover{transform:scale(1.05)}
         <option value="comidas">Comidas</option>
         <option value="profesiones">Profesiones</option>
         <option value="ciudades">Ciudades</option>
+        <option value="videojuegos">Videojuegos</option>
+        <option value="custom">Personalizada</option>
     </select>
+    
+    <div id="customCategoryContainer" class="custom-category-container hidden">
+        <label>Palabras personalizadas</label>
+        <textarea id="customWords" class="custom-words" placeholder="Escribe 20 palabras separadas por comas o saltos de línea. Ejemplo: Palabra1, Palabra2, Palabra3..."></textarea>
+    </div>
+    
     <button onclick="startGame()">Comenzar</button>
 </div>
 
@@ -163,7 +210,7 @@ button:hover{transform:scale(1.05)}
 <!-- FINAL -->
 <div id="end" class="card hidden">
     <h2>💬 Discusión</h2>
-    <button onclick="revealImpostors()">Revelar impostor(es)</button>
+    <button onclick="revealImpostors()">Revelar impostor(es) y perdido(s)</button>
 </div>
 
 <!-- FIRMA -->
@@ -177,29 +224,167 @@ const categories={
     animales:["León","Tigre","Elefante","Jirafa","Cocodrilo","Lobo","Oso","Mono","Águila","Tiburón","Delfín","Pingüino","Cebra","Rinoceronte","Serpiente"],
     comidas:["Pizza","Hamburguesa","Tacos","Sushi","Paella","Pasta","Empanada","Asado","Ramen","Ensalada","Lasagna","Kebab","Burrito","Milanesa","Hot Dog"],
     profesiones:["Doctor","Ingeniero","Profesor","Abogado","Arquitecto","Enfermero","Programador","Diseñador","Chef","Mecánico","Electricista","Periodista","Psicólogo","Veterinario","Contador"],
-    ciudades:["París","Londres","Roma","Tokio","Nueva York","Madrid","Barcelona","Berlín","Lisboa","Moscú","Miami","Dubái","Sídney","Atenas","Ámsterdam"]
+    ciudades:["París","Londres","Roma","Tokio","Nueva York","Madrid","Barcelona","Berlín","Lisboa","Moscú","Miami","Dubái","Sídney","Atenas","Ámsterdam"],
+    videojuegos:["Mario","Zelda","Minecraft","Fortnite","PUBG","GTA","FIFA","Call of Duty","Overwatch","League of Legends","Dota 2","CS:GO","Rocket League","Among Us","Tetris","Pac-Man","Sonic","Pokémon","Final Fantasy","World of Warcraft"]
 };
 
-let roles=[],impostorsArr=[],opened=[],total=0,current=0;
+let roles=[],impostorsArr=[],lostArr=[],opened=[],total=0,current=0,playerNames=[],wordList=[];
+
+function updatePlayerNameInputs(){
+    const numPlayers = Math.min(Math.max(parseInt(document.getElementById('players').value) || 6, 3), 30);
+    document.getElementById('players').value = numPlayers;
+    const container = document.getElementById('playerNamesContainer');
+    container.innerHTML = '';
+    
+    for(let i = 0; i < numPlayers; i++){
+        const div = document.createElement('div');
+        div.innerHTML = `
+            <label>Jugador ${i+1}</label>
+            <input type="text" class="player-name-input" id="playerName${i}" placeholder="Nombre del jugador ${i+1}" value="Jugador ${i+1}">
+        `;
+        container.appendChild(div);
+    }
+    
+    // Update max values for impostors and lost
+    const impostorsInput = document.getElementById('impostors');
+    const lostInput = document.getElementById('lost');
+    impostorsInput.max = numPlayers - 1;
+    lostInput.max = numPlayers - 1;
+    if(parseInt(impostorsInput.value) >= numPlayers) impostorsInput.value = 1;
+    if(parseInt(lostInput.value) > numPlayers) lostInput.value = 0;
+    
+    validateConfig();
+}
+
+function validateConfig(){
+    const totalPlayers = parseInt(document.getElementById('players').value) || 6;
+    const impostors = parseInt(document.getElementById('impostors').value) || 1;
+    const lost = parseInt(document.getElementById('lost').value) || 0;
+    
+    // Ensure impostors + lost doesn't exceed total players
+    if(impostors + lost > totalPlayers){
+        if(impostors > totalPlayers - lost){
+            document.getElementById('impostors').value = Math.max(1, totalPlayers - lost);
+        }
+        if(lost > totalPlayers - impostors){
+            document.getElementById('lost').value = totalPlayers - impostors;
+        }
+    }
+    
+    // Ensure at least 1 impostor and total players > impostors + lost
+    if(impostors >= totalPlayers){
+        document.getElementById('impostors').value = totalPlayers - 1;
+    }
+}
+
+function toggleCustomInput(){
+    const categorySelect = document.getElementById('category');
+    const customContainer = document.getElementById('customCategoryContainer');
+    
+    if(categorySelect.value === 'custom'){
+        customContainer.classList.remove('hidden');
+    } else {
+        customContainer.classList.add('hidden');
+    }
+}
+
+// Initialize player name inputs on load
+window.onload = function(){
+    updatePlayerNameInputs();
+    document.getElementById('players').addEventListener('input', function(){
+        // Ensure minimum 3 players
+        if(this.value < 3) this.value = 3;
+        if(this.value > 30) this.value = 30;
+        updatePlayerNameInputs();
+    });
+    
+    document.getElementById('impostors').addEventListener('input', validateConfig);
+    document.getElementById('lost').addEventListener('input', validateConfig);
+};
 
 function goStep2(){
-    total=+players.value;
-    if(+impostors.value>=total){alert("Impostores inválidos");return;}
+    total = parseInt(document.getElementById('players').value);
+    const impostorsCount = parseInt(document.getElementById('impostors').value);
+    const lostCount = parseInt(document.getElementById('lost').value);
+    
+    if(impostorsCount >= total){
+        alert("Impostores inválidos");
+        return;
+    }
+    
+    if(impostorsCount + lostCount > total){
+        alert("El número total de impostores y perdidos no puede exceder el número de jugadores");
+        return;
+    }
+    
+    // Collect player names
+    playerNames = [];
+    for(let i = 0; i < total; i++){
+        const nameInput = document.getElementById(`playerName${i}`);
+        playerNames.push(nameInput.value.trim() || `Jugador ${i+1}`);
+    }
+    
     step1.classList.add("hidden");
     step2.classList.remove("hidden");
 }
 
-function startGame(){
-    const word=categories[category.value][Math.floor(Math.random()*15)];
-    roles=Array(total).fill(word);
-    impostorsArr=[];
-    opened=Array(total).fill(false);
+function getCustomWords(){
+    const customWordsInput = document.getElementById('customWords').value;
+    if(!customWordsInput.trim()){
+        return [];
+    }
+    
+    // Split by commas, newlines, or multiple spaces
+    let words = customWordsInput.split(/[,;\n\r\s]+/).filter(word => word.trim() !== '');
+    
+    // Remove duplicates and trim whitespace
+    words = [...new Set(words.map(word => word.trim()))];
+    
+    return words;
+}
 
-    while(impostorsArr.length<+impostors.value){
-        let r=Math.floor(Math.random()*total);
-        if(!impostorsArr.includes(r)){
+function startGame(){
+    const categorySelect = document.getElementById('category').value;
+    
+    if(categorySelect === 'custom'){
+        const customWords = getCustomWords();
+        if(customWords.length < 1){
+            alert("Por favor, ingresa al menos una palabra para la categoría personalizada.");
+            return;
+        }
+        wordList = customWords;
+    } else {
+        wordList = categories[categorySelect];
+    }
+    
+    // Select a random word from the list for the main word
+    const mainWord = wordList[Math.floor(Math.random() * wordList.length)];
+    
+    roles = Array(total).fill(mainWord);
+    impostorsArr = [];
+    lostArr = [];
+    opened = Array(total).fill(false);
+
+    // Assign impostors
+    while(impostorsArr.length < parseInt(document.getElementById('impostors').value)){
+        let r = Math.floor(Math.random()*total);
+        if(!impostorsArr.includes(r) && !lostArr.includes(r)){
             impostorsArr.push(r);
-            roles[r]="IMPOSTOR";
+            roles[r] = "IMPOSTOR";
+        }
+    }
+    
+    // Assign lost players with different words from the same category
+    while(lostArr.length < parseInt(document.getElementById('lost').value)){
+        let r = Math.floor(Math.random()*total);
+        if(!impostorsArr.includes(r) && !lostArr.includes(r)){
+            lostArr.push(r);
+            // Select a different word from the same category for lost players
+            let differentWord;
+            do {
+                differentWord = wordList[Math.floor(Math.random() * wordList.length)];
+            } while (differentWord === mainWord);
+            roles[r] = differentWord;
         }
     }
 
@@ -209,53 +394,69 @@ function startGame(){
 }
 
 function renderGrid(){
-    grid.innerHTML="";
-    opened.forEach((v,i)=>{
-        const d=document.createElement("div");
-        d.className="player-box"+(v?" ready":"");
-        d.innerHTML=v?`Jugador ${i+1}<br>Listo ✅`:`Jugador ${i+1}`;
-        if(!v) d.onclick=()=>openPlayer(i);
+    grid.innerHTML = "";
+    opened.forEach((v,i) => {
+        const d = document.createElement("div");
+        d.className = "player-box" + (v ? " ready" : "");
+        d.innerHTML = v ? `${playerNames[i]}<br>Listo ✅` : playerNames[i];
+        if(!v) d.onclick = () => openPlayer(i);
         grid.appendChild(d);
     });
 
-    if(opened.every(v=>v)){
+    if(opened.every(v => v)){
         gridView.classList.add("hidden");
         end.classList.remove("hidden");
     }
 }
 
 function openPlayer(i){
-    current=i;
+    current = i;
     gridView.classList.add("hidden");
     playerView.classList.remove("hidden");
-    playerTitle.innerText=`Jugador ${i+1}`;
+    playerTitle.innerText = playerNames[i];
     flipCard.classList.remove("flipped");
-    roleBack.innerHTML="";
+    roleBack.innerHTML = "";
     showBtn.classList.remove("hidden");
     nextBtn.classList.add("hidden");
 }
 
 function showRole(){
-    roleBack.innerHTML=roles[current]==="IMPOSTOR"
-        ? `<span class="impostor">❌ IMPOSTOR</span>`
-        : `<span class="word">✅ ${roles[current]}</span>`;
+    if(roles[current] === "IMPOSTOR"){
+        roleBack.innerHTML = `<span class="impostor">❌ IMPOSTOR</span>`;
+    } else {
+        // For both regular players and lost players, show their word
+        roleBack.innerHTML = `<span class="word">✅ ${roles[current]}</span>`;
+    }
     flipCard.classList.add("flipped");
     showBtn.classList.add("hidden");
     nextBtn.classList.remove("hidden");
 }
 
 function closePlayer(){
-    opened[current]=true;
+    opened[current] = true;
     playerView.classList.add("hidden");
     gridView.classList.remove("hidden");
     renderGrid();
 }
 
 function revealImpostors(){
-    end.innerHTML="<h2>🕵️ Impostor(es)</h2>";
-    impostorsArr.forEach(i=>{
-        end.innerHTML+=`<p class="impostor big">Jugador ${i+1}</p>`;
-    });
+    end.innerHTML = "<h2>🕵️ Resultados</h2>";
+    
+    // Show impostors
+    if(impostorsArr.length > 0){
+        end.innerHTML += "<h3>Impostor(es):</h3>";
+        impostorsArr.forEach(i => {
+            end.innerHTML += `<p class="impostor big">${playerNames[i]}</p>`;
+        });
+    }
+    
+    // Show lost players
+    if(lostArr.length > 0){
+        end.innerHTML += "<h3>Perdido(s):</h3>";
+        lostArr.forEach(i => {
+            end.innerHTML += `<p class="lost big">${playerNames[i]}</p>`;
+        });
+    }
 }
 </script>
 
